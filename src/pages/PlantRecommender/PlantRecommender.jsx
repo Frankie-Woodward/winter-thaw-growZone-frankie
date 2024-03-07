@@ -1,82 +1,75 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Papa from 'papaparse';
+import { savePlantsToUserProfile } from '../../utilities/users-service';
+import { useUser } from '../../contexts/UserContext';
 
 export default function PlantRecommender() {
-  const [zipCode, setZipCode] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [plantRecommendations, setPlantRecommendations] = useState([]);
+    const [zipCode, setZipCode] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [plantRecommendations, setPlantRecommendations] = useState([]);
+    const [selectedPlants, setSelectedPlants] = useState([]);
+    const { user } = useUser(); // Get the user from context
 
-  const fetchLatLongFromZip = async (zipCode) => {
-    try {
-      const apiKey = process.env.REACT_APP_OPENWEATHER_API_KEY;
-      const url = `http://api.openweathermap.org/geo/1.0/zip?zip=${zipCode},us&appid=${apiKey}`;
-      const response = await axios.get(url);
-      return { lat: response.data.lat, lon: response.data.lon };
-    } catch (error) {
-      console.error('Error fetching geocode:', error);
-      throw new Error('Failed to fetch geocode. Please check the ZIP code and try again.');
-    }
-  };
+    useEffect(() => {
+        // Load the first 50 plants as default display
+        loadInitialPlants();
+    }, []);
+    const loadInitialPlants = async () => {
+        const csvFileUrl = '/plants.csv'; // Ensure the URL is accessible from the public directory
+        Papa.parse(csvFileUrl, {
+            download: true,
+            header: true,
+            complete: function(results) {
+                const initialPlants = results.data.slice(0, 50); // Take first 50 plants
+                setPlantRecommendations(initialPlants);
+            },
+            error: (error) => {
+                console.error('Error loading initial plants:', error);
+                setError('Failed to load initial plant data. Please try again later.');
+            },
+        });
+    };
+    const fetchWeatherAndRecommendPlants = async (lat, lon) => {
+        setIsLoading(true);
+        try {
+            const apiKey = process.env.REACT_APP_OPEN_WEATHER_MAP_API_KEY;
+            const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}`;
+            const response = await axios.get(url);
+            // Consider a more nuanced approach based on actual precipitation data if available
+            // For demonstration, simply marking precipitation as 1 for simplification
+            const precipitation = 1; 
 
-  const fetchHistoricalWeather = async (lat, lon) => {
-    try {
-      const month = new Date().getMonth() + 1; // Fetch for current month
-      const apiKey = process.env.REACT_APP_OPENWEATHER_API_KEY;
-      const url = `https://history.openweathermap.org/data/2.5/aggregated/month?month=${month}&lat=${lat}&lon=${lon}&appid=${apiKey}`;
-      const response = await axios.get(url);
-      return response.data.result;
-    } catch (error) {
-      console.error('Error fetching historical weather data:', error);
-      throw new Error('Failed to fetch historical weather data. Please try again later.');
-    }
-  };
+            fetchAndRecommendPlants(precipitation);
+        } catch (error) {
+            console.error('Error fetching weather data:', error);
+            setError('Failed to fetch weather data. Please try again later.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-  const fetchAndRecommendPlants = async (precipitationMedian) => {
-    const csvFileUrl = '/plants.csv';
-  
-    const response = await fetch(csvFileUrl);
-    const reader = response.body.getReader();
-    const result = await reader.read();
-    const decoder = new TextDecoder('utf-8');
-    const csv = decoder.decode(result.value);
-  
-    return new Promise((resolve, reject) => {
-      Papa.parse(csv, {
-        header: true,
-        complete: (results) => {
-          const plants = results.data;
-          const recommendedPlants = plants.filter(plant => {
-            const depthRequirement = parseInt(plant.depth_water_requirement, 10);
-            return (
-              plant.depth_water_requirement &&
-              !isNaN(depthRequirement) &&
-              depthRequirement < (precipitationMedian + 1)
-            );
-          }).map(plant => ({
-            id: plant.id,
-            common_name: plant.common_name,
-            scientific_name: plant.scientific_name,
-            other_name: plant.other_name,
-            watering: plant.watering,
-            depth_water_requirement: plant.depth_water_requirement,
-            care_level: plant.care_level,
-            sunlight: plant.sunlight,
-            soil: plant.soil,
-            drought_tolerant: plant.drought_tolerant,
-            maintenance: plant.maintenance,
-            pest_susceptibility: plant.pest_susceptibility,
-            flowering_season: plant.flowering_season,
-            default_image: plant.default_image,
-            description: plant.description,
-            poisonous_to_humans: plant.poisonous_to_humans,
-            poisonous_to_pets: plant.poisonous_to_pets
-          }));
-          resolve(recommendedPlants);
-        },
-        error: (error) => reject(error),
-      });
+  const fetchAndRecommendPlants = async (precipitation) => {
+    const csvFileUrl = '/plants.csv'; // Ensure the URL is accessible from the public directory
+    Papa.parse(csvFileUrl, {
+      download: true,
+      header: true,
+      complete: function(results) {
+        const plants = results.data;
+        console.log(results.data)
+        const recommendedPlants = plants.filter(plant => {
+          const depthRequirement = parseInt(plant.depth_water_requirement, 10);
+          console.log(precipitation)
+          return plant.depth_water_requirement && !isNaN(depthRequirement) && depthRequirement > precipitation;
+        });
+        console.log(recommendedPlants)
+        setPlantRecommendations(recommendedPlants);
+      },
+      error: (error) => {
+        console.error('Error parsing CSV:', error);
+        setError('Failed to load plant data. Please try again later.');
+      },
     });
   };
 
@@ -87,10 +80,11 @@ export default function PlantRecommender() {
     setPlantRecommendations([]);
 
     try {
-      const { lat, lon } = await fetchLatLongFromZip(zipCode);
-      const weatherData = await fetchHistoricalWeather(lat, lon);
-      const recommendedPlants = await fetchAndRecommendPlants(weatherData.precipitation.median);
-      setPlantRecommendations(recommendedPlants);
+      const apiKey = process.env.REACT_APP_OPEN_WEATHER_MAP_API_KEY;
+      const url = `http://api.openweathermap.org/geo/1.0/zip?zip=${zipCode},us&appid=${apiKey}`;
+      const response = await axios.get(url);
+      const { lat, lon } = response.data;
+      fetchWeatherAndRecommendPlants(lat, lon);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -98,34 +92,59 @@ export default function PlantRecommender() {
     }
   };
 
-  return (
+  // Example of handling plant selection - toggles plant ID in the selectedPlants array
+  const togglePlantSelection = (plantId) => {
+    setSelectedPlants(current => 
+      current.includes(plantId) ? current.filter(id => id !== plantId) : [...current, plantId]
+    );
+  };
+
+//   Assuming savePlantsToUserProfile function is defined
+//   This should be triggered by a button click after selecting plants
+const handleSaveSelectedPlants = async () => {
+    if (!user || !user._id) {
+        setError('You must be logged in to save plants.');
+        return;
+    }
+    setIsLoading(true);
+    try {
+        // Assuming this function correctly communicates with your backend
+        await savePlantsToUserProfile(user._id, selectedPlants);
+        alert('Plants saved to your profile!');
+        setSelectedPlants([]);
+    } catch (error) {
+        console.error('Error saving plants:', error);
+        setError('Failed to save plants. Please try again.');
+    } finally {
+        setIsLoading(false);
+    }
+};
+return (
     <div>
-      <h1>Plant Recommender</h1>
-      <form onSubmit={handleSubmit}>
-        <label htmlFor="zipCode">Enter your zip code:</label>
-        <input
-          type="text"
-          id="zipCode"
-          value={zipCode}
-          onChange={(e) => setZipCode(e.target.value)}
-          required
-        />
-        <button type="submit" disabled={isLoading}>
-          {isLoading ? 'Loading...' : 'Get Recommendations'}
-        </button>
-      </form>
-      {error && <p>Error: {error}</p>}
-      <div>
-        {plantRecommendations.map((plant) => (
-          <div key={plant.id}>
-            <h3>{plant.common_name} ({plant.scientific_name})</h3>
-            <p>{plant.description}</p>
-            {/* Render plant image if exists */}
-            {plant.default_image && <img src={plant.default_image} alt={plant.common_name} />}
-            {/* Add more plant details you want to render */}
-          </div>
-        ))}
-      </div>
+        <h1>Plant Recommender</h1>
+        <form onSubmit={handleSubmit}>
+            <label htmlFor="zipCode">Enter your zip code:</label>
+            <input
+                type="text"
+                id="zipCode"
+                value={zipCode}
+                onChange={(e) => setZipCode(e.target.value)}
+                required
+            />
+            <button type="submit" disabled={isLoading}>{isLoading ? 'Loading...' : 'Get Recommendations'}</button>
+        </form>
+        {error && <p>Error: {error}</p>}
+        <div>
+            {plantRecommendations.map((plant, index) => (
+                <div key={index}>
+                    <h3>{plant.common_name} ({plant.scientific_name})</h3>
+                    <p>{plant.description}</p>
+                    <input type="checkbox" checked={selectedPlants.includes(plant.id)} onChange={() => togglePlantSelection(plant.id)} />
+                    {plant.default_image && <img src={plant.default_image} alt={plant.common_name} style={{width: "100px"}} />}
+                </div>
+            ))}
+            <button onClick={handleSaveSelectedPlants} disabled={isLoading || selectedPlants.length === 0}>Save Selected Plants</button>
+        </div>
     </div>
-  );
+);
 }

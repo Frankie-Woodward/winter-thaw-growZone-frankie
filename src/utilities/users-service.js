@@ -6,6 +6,21 @@ const baseURL = `http://localhost:${backendPort}`;
 const axiosInstance = axios.create({
   baseURL: baseURL,
 });
+// users-service.js
+
+export const login = async (credentials) => {
+    const response = await axios.post('/api/users/login', credentials);
+    return response.data; // Assuming the server returns the user object
+};
+
+
+// In your utilities or services file
+export async function savePlantsToUserProfile(userId, plants) {
+    // Replace with actual API call to your backend
+    const { data } = await axios.post(`/api/users/${userId}/plants`, { plants });
+    return data;
+}
+
 
 export async function getUserProfile(userId) {
   const { data } = await axiosInstance.get(`/api/users/${userId}`);
