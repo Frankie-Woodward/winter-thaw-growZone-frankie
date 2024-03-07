@@ -1,8 +1,26 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
-const bcrypt = require('bcrypt');
+require('dotenv').config()
 
-const SALT_ROUNDS = 6;
+const plantSchema = new mongoose.Schema({
+  id: { type: mongoose.Schema.Types.ObjectId, required: true, auto: true },
+  common_name: { type: String, required: true },
+  scientific_name: { type: String, required: true },
+  other_name: { type: String },
+  watering: { type: String },
+  depth_water_requirement: { type: Number },
+  care_level: { type: String },
+  sunlight: { type: String },
+  soil: { type: String },
+  drought_tolerant: { type: Boolean },
+  maintenance: { type: String },
+  pest_susceptibility: { type: String },
+  flowering_season: { type: String },
+  default_image: { type: String },
+  description: { type: String },
+  poisonous_to_humans: { type: Boolean },
+  poisonous_to_pets: { type: Boolean }
+});
 
 const userSchema = new Schema({
     name: {type: String, required: true},
@@ -18,7 +36,12 @@ const userSchema = new Schema({
         trim: true,
         minLength: 3,
         required: true
-    }
+    },
+    zipcode: {
+        type: Number,
+        required: true
+    },
+    myplants: [plantSchema],
 }, {
     timestamps: true,
     toJSON: {
@@ -29,12 +52,6 @@ const userSchema = new Schema({
     }
 });
 
-userSchema.pre('save', async function(next) {
-    // 'this' is the user doc
-    if (!this.isModified('password')) return next();
-    // update the password with the computed hash
-    this.password = await bcrypt.hash(this.password, SALT_ROUNDS);
-    return next();
-});
+
 
 module.exports = mongoose.model('User', userSchema);
