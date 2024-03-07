@@ -1,32 +1,39 @@
-import {useState} from "react";
+import { useState, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
-import AuthPage from "../AuthPage/AuthPage";
-import NewOrderPage from "../NewOrderPage/NewOrderPage";
-import OrderHistoryPage from "../OrderHistoryPage/OrderHistoryPage";
-import NavBar from "../../components/NavBar/NavBar";
-import { getUser } from '../../utilities/users-service';
 import './App.css';
 import PlantRecommender from "../PlantRecommender/PlantRecommender";
-
-
+import { getUserProfile } from "../../utilities/users-service";
 
 export default function App() {
-  const [user, setUser] = useState(getUser());
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    async function fetchUserProfile() {
+      try {
+        const userProfile = await getUserProfile(); // Assuming this function is properly implemented to get the user's profile
+        setUser(userProfile);
+      } catch (error) {
+        console.error("Error fetching user profile:", error);
+        setUser(null);
+      }
+    }
+
+    fetchUserProfile();
+  }, []); // Empty dependency array means this effect runs once on mount
+
   return (
     <main className="App">
-      { user ?
-      <>
-      <NavBar user={user} setUser={setUser}/>
-      <Routes>
-        <Route path="/orders/new" element={<NewOrderPage />} />
-        <Route path="/orders" element={<OrderHistoryPage />} />
-        <Route path="/plant-recommender" element={<PlantRecommender />} /> {/* New Route for Plant Recommender */}
-
-      </Routes>
-      </>
-      :
-      <AuthPage setUser={setUser}/>
-      }
+      {user ? (
+        <>
+          <Routes>
+            <Route path="/plant-recommender" element={<PlantRecommender />} />
+            {/* Add more authenticated routes here */}
+          </Routes>
+        </>
+      ) : (
+        // Optionally, render something else when there is no user logged in
+        <p>Please log in to access the Plant Recommender.</p>
+      )}
     </main>
   );
 }

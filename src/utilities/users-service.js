@@ -1,47 +1,33 @@
-import * as usersAPI from './users-api';
+import axios from 'axios';
 
-export async function signUp(userData) {
-    // Delegate the network request code to the users-api.js API module
-    // which will ultimately return a JSON Web Token (JWT)
-    const token = await usersAPI.signUp(userData);
-    // Persist the "token"
-    localStorage.setItem('token', token);
-    // Baby step by returning whatever is sent back by the server
-    return getUser();
+const backendPort = 3001; // Change this to your backend port
+const baseURL = `http://localhost:${backendPort}`;
+
+const axiosInstance = axios.create({
+  baseURL: baseURL,
+});
+
+export async function getUserProfile(userId) {
+  const { data } = await axiosInstance.get(`/api/users/${userId}`);
+  return data;
 }
 
-export async function login(credentials){
-    const token = await usersAPI.login(credentials);
-    localStorage.setItem('token', token);
-    return getUser();
+export async function getUsers() {
+  const { data } = await axiosInstance.get('/api/users');
+  return data;
 }
 
-export function logOut(){
-    localStorage.removeItem('token');
-    return null;
+export async function createUserProfile(profileData) {
+  const { data } = await axiosInstance.post('/api/users/new', profileData);
+  return data;
 }
 
-export function getToken() {
-    // getItem returns null if there's no string
-    const token = localStorage.getItem('token');
-    if (!token) return null;
-    // Obtain the payload of the token
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    // A JWT's exp is expressed in seconds, not milliseconds, so convert
-    if (payload.exp < Date.now() / 1000) {
-      // Token has expired - remove it from localStorage
-        localStorage.removeItem('token');
-        return null;
-    }
-    return token;
+export async function updateUserProfile(profileData, userId) {
+  const { data } = await axiosInstance.put(`/api/users/${userId}`, profileData);
+  return data;
 }
 
-export function getUser() {
-    const token = getToken();
-    // If there's a token, return the user in the payload, otherwise return null
-    return token ? JSON.parse(atob(token.split('.')[1])).user : null;
-}
-
-export function checkToken(){
-    return usersAPI.checkToken().then(dateStr => new Date(dateStr));
+export async function deleteUserProfile(userId) {
+  const { data } = await axiosInstance.delete(`/api/users/${userId}`);
+  return data;
 }
